@@ -23,14 +23,6 @@ Sprite_Table: DS $A0
 
 SECTION "Video",ROM0
 
-InitSpriteDMA::
-    ; copy spritedma routine into hiram
-    ld      hl,SpriteDMA
-    ld      de,$FF80
-    ld      bc,SpriteDMAEnd - SpriteDMA
-    call    mem_Copy
-    ret
-
 ; SpriteDMA routine (copied to HiRAM at $FF80)
 SpriteDMA:
     ld      a,$C0
@@ -41,17 +33,6 @@ SpriteDMA:
     jr      nz,.lp
     ret
 SpriteDMAEnd:
-
-
-LCDC_irq::
-    reti
-
-  
-VBlank_irq::
-    push    af
-    call    $FF80
-    pop     af
-    reti
 
 
 waitvbl::

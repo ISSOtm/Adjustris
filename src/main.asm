@@ -124,15 +124,15 @@ MainLoop:
     ldh     [rLCDC],a
 
     ldh     a,[GameMode]
-    cp      0
+    and     a
     jr      z,.GamePlay
-    cp      1
+    dec     a
     jr      z,.PieceEditor
-    cp      2
+    dec     a
     jr      z,.HiScores
-    cp      3
+    dec     a
     jr      z,.Credits
-
+    
     ld      a,1
     ldh     [rLCDC],a
 
@@ -172,29 +172,25 @@ MainLoop:
 
 
 vblank:
-    push    af
-    push    hl
     push    bc
     push    de
-    call    $FF80
     ldh     a,[GameMode]
-    cp      1
-    jp      z,.PE_VBlank
     cp      $FF
     jr      z,.Menu_VBlank
-    cp      2
+    dec     a
+    jp      z,.PE_VBlank
+    dec     a
     jr      z,.Hiscores_VBlank
-    cp      3
+    dec     a
     jp      z,.Credits_VBlank
     ldh     a,[TileUpdate]
-    cp      0
+    and     a
     jr      z,.done
     call    UpdateTiles
     jr      .done_VBlank
 .done
     ldh     a,[FrameCounter]
     and     1
-    cp      0
     jr      nz,.second
     call    UpdateScoreTiles
     jr      .done_VBlank
@@ -222,7 +218,7 @@ vblank:
     call    mem_Copy
 
     ldh     a,[MenuPosition]
-    cp      0
+    and     a
     jr      nz,.Menu_V_NotPlay
     ld      hl,$9A12
     ldh     a,[SelectedSet]
@@ -233,7 +229,7 @@ vblank:
 
 .Hiscores_VBlank
     ldh     a,[HI_UpdateScores]
-    cp      0
+    and     a
     jr      z,.Hiscores_V_done
     xor     a
     ldh     [HI_UpdateScores],a
@@ -248,8 +244,8 @@ vblank:
     jr      nz,.Hiscores_V_offset
     inc     hl            ; skip checksum
 
-    ld      a,$0A
-    ld      [$00],a        ; enable sram
+    ld      a,CART_RAM_ENABLE
+    ld      [rRAMG],a        ; enable sram
 
     ld      de,$9889
     ld      bc,6
@@ -262,12 +258,11 @@ vblank:
     call    mem_Copy
 
     xor     a
-    ld      [$00],a        ; disable sram
+    ld      [rRAMG],a        ; disable sram
 
     ldh     a,[HI_CurrentSet]
     inc     a
-    ld      hl,$996F
-    ld      [hl],a
+    ld      [$996F],a
 
 .Hiscores_V_done
     jr      .done_VBlank
