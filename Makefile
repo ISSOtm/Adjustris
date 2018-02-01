@@ -7,7 +7,7 @@ EXT = gb
 
 EMULATOR = wine ../../Utilities/bgb1.5.4/bgb.exe
 
-SOURCE = src gfx inc
+SOURCE = src gfx
 
 SOURCE_DIRS = $(shell find $(SOURCE) -type d -print)
 SOURCES = $(foreach dir,$(SOURCE_DIRS),$(wildcard $(dir)/*.asm))
