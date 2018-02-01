@@ -19,10 +19,12 @@ INCLUDE "engine.inc"
 
 SECTION "Room Title Code/Data",ROM0
 
+NB_MENU_ITEMS = 4
+
 RoomTitle::
 
     ldh     a,[rLCDC]       ; Turn off screen (for quick loading)
-    cp      0
+    and     a
     jr      z,.screenOff
 .waitForLY
     ldh     a,[rLY]
@@ -39,7 +41,7 @@ RoomTitle::
     ldh     [rSCX],a
     ldh     [rWY],a
     ldh     [MenuPosition],a
-    ld      a,$FF
+    dec     a ; ld      a,$FF
     ldh     [GameMode],a
 
     ld      a,$80
@@ -54,6 +56,11 @@ RoomTitle::
     ld      hl,$C000
     ld      bc,$00A0
     call    mem_Set          ; Clear OAM Table
+    
+    ld      hl,.OAMTable
+    ld      de,Sprite_Table
+    ld      bc,4 * 4
+	call    mem_Copy
 
     ld      hl,Tiles_Numbers   ; Load Numerical Tiles 
     ld      de,$9300
@@ -72,8 +79,8 @@ RoomTitle::
     call    mem_Copy
 
     ld      hl,PE_CursorTiles
-    ld      de,$8000
-    ld      bc,$0080
+    ld      de,$8010
+    ld      bc,$00B0
     call    mem_Copy
     ld      hl,PE_Icons
     ld      de,$9210
@@ -149,189 +156,171 @@ RoomTitle::
 
     xor     a
     ldh     [SelectedSet],a   ; start on set 0 (1)
-
+    
+    ldh     a,[SystemType]
+    and     a
+    jr      z,.SkipCGBSetup
+    ld      hl,.OBJPalette
+    ld      b,8
     xor     a
-    ldh     [$0F],a
+    call    SetPalOBJ
+.SkipCGBSetup
+
     ld      a,%11100011
     ldh     [rLCDC],a
-    ld      a,%00000001
-    ldh     [$FF],a   ; Enable VBlank
+    xor     a
+    ldh     [rIF],a
+    inc     a ; ld      a,%00000001
+    ldh     [rIE],a   ; Enable VBlank
 
 .MenuLoop
     call    UpdateMenuCursor
     call    MenuInput
     halt
-    nop
     ldh     a,[GameMode]
-    cp      $FF
+    inc     a
     jr      z,.MenuLoop
     ret
+    
+.OAMTable
+    db $90, $47, 9, 0
+    db $90, $A1, 9, OAMF_XFLIP
+    db $88, $98, 8, 0
+    db $99, $98, 8, OAMF_YFLIP
+    
+.OBJPalette
+    dw      $4A52, $318C, $18C6, $0000
 
 
 UpdateMenuCursor:
-    ld      hl,$C000
-    ld      a,$90
-    ld      [hli],a
-    ld      a,$47
-    ld      [hli],a
-    xor     a
-    ld      [hli],a
-    xor     a
-    ld      [hli],a
-
-    ld      a,$90
-    ld      [hli],a
-    ld      a,$A1
-    ld      [hli],a
-    xor     a
-    ld      [hli],a
-    ld      a,%00100000
-    ld      [hli],a
-
     ldh     a,[MenuPosition]
-    cp      0
-    jr      nz,.not_play
+    and     a
     ld      a,$88
-    ld      [hli],a
-    ld      a,$98
-    ld      [hli],a
-    ld      a,7
-    ld      [hli],a
-    xor     a
-    ld      [hli],a
-
-    ld      a,$99
-    ld      [hli],a
-    ld      a,$98
-    ld      [hli],a
-    ld      a,7
-    ld      [hli],a
-    ld      a,%01000000
-    ld      [hli],a
-    ret
-  
-.not_play
-    xor     a
-    ld      bc,8
-    call    mem_Set
-
-    ret
+    jr      z,.displayVerticalCursors
+    ld      a,$A0
+.displayVerticalCursors
+    ld      [Sprite_Table + 4 * 2],a
+    add     a,$11
+    ld      [Sprite_Table + 4 * 3],a
+    ret 
 
 
 
 MenuInput:
     ldh     a,[MenuDelay]
-    cp      0
+    and     a
     jr      z,.ok
     dec     a
     ldh     [MenuDelay],a
+    
+    cp      3
+    ret     nz
+    ld      hl,Sprite_Table + 2
+    ld      de,4
+    ld      c,40
+.resetCursorTiles
+    ld      a,[hl]
+    and     $FD
+    ld      [hl],a
+    add     hl,de
+    dec     c
+    jr      nz,.resetCursorTiles
     ret
 .ok
     call    ReadJoyPad
     call    RandomNumber
-    
-    ldh     a,[hPadPressed]
-    and     BUTTON_UP
-    jr      nz,.UpPressed
-    ldh     a,[hPadHeld]
-    and     BUTTON_UP
-    jr      nz,.UpPressed
-
-    ldh     a,[hPadPressed]
-    and     BUTTON_DOWN
-    jr      nz,.DownPressed
-    ldh     a,[hPadHeld]
-    and     BUTTON_DOWN
-    jr      nz,.DownPressed
-
-    ldh     a,[hPadPressed]
-    and     BUTTON_LEFT
-    jr      nz,.LeftPressed
-    ldh     a,[hPadHeld]
-    and     BUTTON_LEFT
-    jr      nz,.LeftPressed
-
-    ldh     a,[hPadPressed]
-    and     BUTTON_RIGHT
-    jr      nz,.RightPressed
-    ldh     a,[hPadHeld]
-    and     BUTTON_RIGHT
-    jr      nz,.RightPressed
-
-    ldh     a,[hPadPressed]
-    and     BUTTON_A|BUTTON_START
-    jr    nz,.ConfirmPressed
-
-    ret  
-.LeftPressed
-    ld      hl,FX_menuMove
-    call    MS_sfxM2
     ld      a,GUIDelay
     ldh     [MenuDelay],a
-    ldh     a,[MenuPosition]
-    dec     a
-    cp      $FF
-    jr      nz,.DoneMove
-    ld      a,3
-.DoneMove
-    ldh     [MenuPosition],a
+    
+    ld      b,3 ; Index of the sprite to be blinked
+    ldh     a,[hPadHeld]
+    bit     PADB_DOWN,a
+    jr      nz,.DownPressed
+    dec b
+    bit     PADB_UP,a
+    jr      nz,.UpPressed
+    dec b
+    bit     PADB_RIGHT,a
+    jr      nz,.RightPressed
+    dec b
+    bit     PADB_LEFT,a
+    jr      nz,.LeftPressed
+
+    ldh     a,[hPadPressed]
+    and     PADF_A|PADF_START
+    jr      nz,.ConfirmPressed
+
+    xor     a
+    ldh     [MenuDelay],a
     ret
+    
 .RightPressed
     ld      hl,FX_menuMove
     call    MS_sfxM2
-    ld      a,GUIDelay
-    ldh     [MenuDelay],a
     ldh     a,[MenuPosition]
     inc     a
-    cp      4
+    cp      NB_MENU_ITEMS
     jr      nz,.DoneMove
     xor     a
     jr      .DoneMove
-.DownPressed
-    ldh     a,[MenuPosition]
-    cp      0
-    jr      nz,.SkipSet
-    ld      hl,FX_menuMove     ; different FX?
+.LeftPressed
+    ld      hl,FX_menuMove
     call    MS_sfxM2
-    ld      a,GUIDelay
-    ldh     [MenuDelay],a
-    ldh     a,[SelectedSet]
+    ldh     a,[MenuPosition]
+    and     a
+    jr      nz,.DontWrapLeft
+    ld      a,NB_MENU_ITEMS
+.DontWrapLeft
     dec     a
-    cp      $FF
-    jr      nz,.DoneSet
-    ld      a,7
-.DoneSet
-    ldh     [SelectedSet],a
-.SkipSet
-    ret
+.DoneMove
+    ldh     [MenuPosition],a
+    jr      .BlinkCursor
+    
 .UpPressed
     ldh     a,[MenuPosition]
-    cp      0
-    jr      nz,.SkipSet
+    and     a
+    ret     nz
     ld      hl,FX_menuMove     ; different FX?
     call    MS_sfxM2
-    ld      a,GUIDelay
-    ldh     [MenuDelay],a
     ldh     a,[SelectedSet]
     inc     a
     cp      8
     jr      nz,.DoneSet
     xor     a
     jr      .DoneSet
+.DownPressed
+    ldh     a,[MenuPosition]
+    and     a
+    ret     nz
+    ld      hl,FX_menuMove     ; different FX?
+    call    MS_sfxM2
+    ldh     a,[SelectedSet]
+    and     a
+    jr      nz,.DontWrapSet
+    ld      a,8
+.DontWrapSet
+    dec     a
+.DoneSet
+    ldh     [SelectedSet],a
+    
+.BlinkCursor
+    ld      a,b
+    add     a,a
+    add     a,a
+    add     2
+    ld      l,a
+    ld      h,HIGH(Sprite_Table)
+    ld      a,[hl]
+    or      $02
+    ld      [hl],a
+    ret
+    
 .ConfirmPressed
     ld      hl,FX_menuSelect
     call    MS_sfxM2
-    ld      a,GUIDelay
-    ldh     [MenuDelay],a
     ldh     a,[MenuPosition]
-    cp      0
-    jr      z,.ConfirmInfinite
-    cp      1
-    jr      z,.ConfirmPieceEditor
-    cp      2
-    jr      z,.ConfirmHiScores
-    cp      3
-    jr      z,.ConfirmCredits
+    cp      4
+    jr      c,.EnterNewMode
     ;HiScore
     ld      a,$07
     ldh     [rWX],a
@@ -339,7 +328,7 @@ MenuInput:
     ldh     [rLCDC],a
 .HiScoreLoop
     ldh     a,[MenuDelay]
-    cp      0
+    and     a
     jr      z,.Hiok
     dec     a
     ldh     [MenuDelay],a
@@ -347,11 +336,10 @@ MenuInput:
 .Hiok
     call    ReadJoyPad
     ldh     a,[hPadPressed]
-    and     BUTTON_B|BUTTON_START
+    and     PADF_B|PADF_START
     jr      nz,.HiScoreReturn
 .skip
     halt
-    nop
     jr      .HiScoreLoop
 .HiScoreReturn
     ld      a,$A8
@@ -360,16 +348,7 @@ MenuInput:
     ldh     [rLCDC],a
 .ConfirmDone
     ret  
-.ConfirmInfinite
-    ldh     [GameMode],a
-    jr      .ConfirmDone
-.ConfirmPieceEditor
-    ldh     [GameMode],a
-    jr      .ConfirmDone
-.ConfirmHiScores
-    ldh     [GameMode],a
-    jr      .ConfirmDone
-.ConfirmCredits
+.EnterNewMode
     ldh     [GameMode],a
     jr      .ConfirmDone
 
