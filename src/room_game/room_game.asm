@@ -576,7 +576,7 @@ UpdateSprite:
     ld      [hli],a
     ld      a,c
     ld      [hli],a
-    ld      a,$85
+    ld      a,$80
     ld      [hli],a
     dec     b
     jr      nz,.lp
