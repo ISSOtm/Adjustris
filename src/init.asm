@@ -23,7 +23,10 @@ INCLUDE "engine.inc"
 ;******************************************************************************
 
 SECTION "VBLANK IRQ",ROM0[$0040]
-    jp vblank
+    push    af
+    push    hl
+    call    SpriteDMA_HRAM
+    jp      vblank
 
 SECTION "LCDC IRQ",ROM0[$0048]
     reti
@@ -45,14 +48,21 @@ SECTION "HILO IRQ",ROM0[$0060]
 
 SECTION "Init",ROM0[$0150]
 
-Start::
-    di
-
-    push    af
+; This label is located in header.asm, in order to jr to it.
+; Start::
+_Start:
+    ld      sp,$E000
+    
+    sub     $11
+    jr      z,.CGB
+    ld      a,$FF
+.CGB
+    inc     a
+    push    af          ; Save this for after clearing
+	
     call    waitvbl
     xor     a
     ldh     [rLCDC],a   ; Turn off screen (for quick loading)
-    pop     af
 
     xor     a           ; Clear RAM
     ld      hl,$8000
@@ -61,27 +71,63 @@ Start::
     ld      hl,$C000
     ld      bc,$1000
     call    mem_Set
-    ld      hl,$FF90
-    ld      bc,$0050
+    
+    ; Init HRAM
+    ld      bc,10 << 8 | LOW(SpriteDMA_HRAM)
+    ld      hl,SpriteDMA
+.copyDMARoutine
+    ld      a,[hli]
+    ld      [c],a
+    inc     c
+    dec     b
+    jr      nz,.copyDMARoutine
+    
+    ld      b,$7F - 10
+    xor     a
+.initHRAM
+    ld      [c],a
+    inc     c
+    dec     b
+    jr      nz,.initHRAM
+    
+    pop     af
+    ldh     [SystemType],a
+    and     a
+    jr      z,.skipCGBInit
+    ; ld      a,1
+    ld      [rVBK],a
+    xor     a
+    ld      hl,$8000
+    ld      bc,$2000
     call    mem_Set
+    ; xor     a
+    ld      [rVBK],a
+    
+    ld      hl,.defaultCGBPalette
+    xor     a
+    ld      b,8
+    call    SetPalBG
+    jr      .skipDMGInit
+    
+.defaultCGBPalette
+    dw      $4A52, $318C, $18C6, $0000
+    
+.skipCGBInit
   
     ld      a,%11100100 ; Set Palettes
     ldh     [rBGP],a
     ldh     [rOBP0],a
     ldh     [rOBP1],a
+.skipDMGInit
 
     call    InitSRAM
 
-    xor     a
-    ldh     [rIF],a
     ld      a,%01000000
     ldh     [rSTAT],a
     ld      a,9        ; Set STAT Match LY
     ldh     [rLYC],a
   
     call    MS_setup_sound
-
-	call    InitSpriteDMA
 
   
     xor     a
@@ -94,17 +140,16 @@ Start::
     ld      [Seed+1],a
     ld      [Seed+2],a
   
-    ld      a,%00000001
-    ldh     [$FF],a
     ld      a,%10000000 ; turn on the LCD
     ldh     [rLCDC],a
+    xor     a
+    ldh     [rIF],a
+    inc     a
+    ldh     [rIE],a
     
     ei
     
-    halt
-    nop
-    
-    call    Main
+    jp      Main
 
 
 
@@ -113,35 +158,27 @@ InitSRAM:
     ld      de,SaveRef
 
     xor     a
-    ld      [$4000],a   ; set to ram bank 0
+    ld      [rRAMB],a   ; set to ram bank 0
     ld      a,$0A
-    ld      [$00],a     ; enable SRAM access
+    ld      [rRAMG],a     ; enable SRAM access
     ld      b,4
-.lp
+.checkPattern
     ld      a,[de]
-    inc     de
-    ld      c,a
-    ld      a,[hli]
-    cp      c
+    cp      [hl]
     jr      nz,.NoSaveExists
+    inc     de
+    inc     hl
     dec     b
-    jr      nz,.lp
+    jr      nz,.checkPattern
     jr      .SaveExists
     
+    ; Copy remainder of pattern
 .NoSaveExists
-    ld      hl,SaveID              ; copy save reference to SRAM
-    ld      de,SaveRef
     ld      a,[de]
     ld      [hli],a
     inc     de
-    ld      a,[de]
-    ld      [hli],a
-    inc     de
-    ld      a,[de]
-    ld      [hli],a
-    inc     de
-    ld      a,[de]
-    ld      [hli],a
+    dec     b
+    jr      nz,.NoSaveExists
     ld      hl,SavedScores
     ld      a,$80                  ; initialize hiscores
     ld      bc,152                 ; ((6*3)+1)*8
@@ -164,6 +201,6 @@ InitSRAM:
   
 .SaveExists
     xor     a
-    ld      [$00],a     ; disable SRAM access
+    ld      [rRAMG],a     ; disable SRAM access
   
     ret
