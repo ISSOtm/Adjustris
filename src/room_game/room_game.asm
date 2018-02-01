@@ -150,7 +150,7 @@ GameInit:
     ld      hl,$9801           ; side walls
     ld      de,$0020
     ld      a,$0F
-    ld      b,$12
+    ld      b,SCRN_Y_B
 .bglp0
     ld      [hl],a
     add     hl,de
@@ -159,7 +159,7 @@ GameInit:
     ld      hl,$980C
     ld      de,$0020
     ld      a,$10
-    ld      b,$12
+    ld      b,SCRN_Y_B
 .bglp1
     ld      [hl],a
     add     hl,de
@@ -178,18 +178,14 @@ GameInit:
     jr      nz,.bglp2
     ld      [hl],2
     add     hl,de
-    ld      b,5
+    ld      bc,6
+    ld      a,5
 .bglp3
     ld      [hl],7
-    inc     hl
-    inc     hl
-    inc     hl
-    inc     hl
-    inc     hl
-    inc     hl
+    add     hl,bc
     ld      [hl],8  
     add     hl,de
-    dec     b
+    dec     a
     jr      nz,.bglp3
     ld      [hl],3
     inc     hl
@@ -348,7 +344,7 @@ GameInit:
     call    GenerateNextBlockMap
 
     ld      a,%00000001
-    ldh     [$FF],a   ; Enable VBlank Interrupt
+    ldh     [rIE],a   ; Enable VBlank Interrupt
 
     ld      a,%11100011
     ldh     [rLCDC],a		; Turn on LCD
@@ -362,48 +358,47 @@ AlterPiece:
     call    RandomNumber
 
     ldh     a,[hPadPressed]
-    and     BUTTON_DOWN
+    and     PADF_DOWN
     call    nz,.DownPressed
     ldh     a,[hPadHeld]
-    and     BUTTON_DOWN
+    and     PADF_DOWN
     call    nz,.DownHeld
 
     ldh     a,[hPadPressed]
-    and     BUTTON_LEFT
+    and     PADF_LEFT
     call    nz,.LeftPressed
     ldh     a,[hPadHeld]
-    and     BUTTON_LEFT
+    and     PADF_LEFT
     call    nz,.LeftHeld
 
     ldh     a,[hPadPressed]
-    and     BUTTON_RIGHT
+    and     PADF_RIGHT
     call    nz,.RightPressed
     ldh     a,[hPadHeld]
-    and     BUTTON_RIGHT
+    and     PADF_RIGHT
     call    nz,.RightHeld
 
     ldh     a,[hPadPressed]
-    and     BUTTON_A
+    and     PADF_A
     jp      nz,.APressed
     ldh     a,[hPadPressed]
-    and     BUTTON_B
+    and     PADF_B
     jp      nz,.BPressed
 
     ldh     a,[hPadPressed]
-    and     BUTTON_START
-    jr      nz,.StartPressed
+    and     PADF_START
+    ret     z
 
-    ret
 .StartPressed
     ld      a,%11100001  ; kill sprites
     ldh     [rLCDC],a
     ld      a,GUIDelay
     ldh     [MenuDelay],a
-    ld      a,7
+    ld      a,4
     ldh     [rWX],a
 .StartWait
     ldh     a,[MenuDelay]
-    cp      0
+    and     a
     jr      z,.Startok
     dec     a
     ldh     [MenuDelay],a
@@ -412,19 +407,17 @@ AlterPiece:
     call    ReadJoyPad
     
     ldh     a,[hPadPressed]
-    and     BUTTON_START
+    bit     PADB_START,a
     jr      nz,.StartOut
-    ldh     a,[hPadPressed]
-    and     BUTTON_SELECT
+    bit     PADB_SELECT,a
     jr      nz,.GiveUp
 
 .skip
     halt
-    nop
     jr      .StartWait
 .StartOut
     ld      a,%00000001
-    ldh     [$FF],a
+    ldh     [rIE],a
     ld      a,%11100011
     ldh     [rLCDC],a
     ld      a,$A7
@@ -439,11 +432,10 @@ AlterPiece:
     ld      a,1
 .DownMove  
     ldh     [DHCount],a
-    ld      b,1
-    ld      c,0
+    ld      bc,1 << 8
     call    GenerateBlockPhantom
     call    TestBlockPhantom
-    cp      0
+    and     a
     jr      nz,.dnmv
     call    ConfirmBlockPhantom
     ld      hl,FX_gameMove
@@ -470,11 +462,10 @@ AlterPiece:
     ld      a,HoldPause
 .RightMove
     ldh     [RHCount],a
-    ld      b,0
-    ld      c,1
+    ld      bc,1
     call    GenerateBlockPhantom
     call    TestBlockPhantom
-    cp      0
+    and     a
     jr      nz,.dnmv
     call    ConfirmBlockPhantom
     ld      hl,FX_gameMove
@@ -495,11 +486,10 @@ AlterPiece:
     ld      a,HoldPause
 .LeftMove
     ldh     [LHCount],a
-    ld      b,0
-    ld      c,255
+    ld      bc,$FF
     call    GenerateBlockPhantom
     call    TestBlockPhantom
-    cp      0
+    and     a
     jr      nz,.dnmv
     call    ConfirmBlockPhantom
     ld      hl,FX_gameMove
@@ -521,7 +511,7 @@ AlterPiece:
     ld      c,0    ; normal
     call    RotateBlockPhantom
     call    TestBlockPhantom
-    cp      0
+    and     a
     jr      nz,.dnmv
 .cbrok
     call    ConfirmBlockPhantom
@@ -536,7 +526,7 @@ AlterPiece:
     ld      c,1    ; opposite
     call    RotateBlockPhantom
     call    TestBlockPhantom
-    cp      0
+    and     a
     jp      nz,.dnmv
 .cblok
     call    ConfirmBlockPhantom
@@ -603,293 +593,20 @@ UpdateTiles:
 .past
     ; 9 loops
     ld bc,$0016          ; x
-
+REPT 8
+  REPT 10
     ld a,[de]            ; 2
     inc e                ; 2
     ld [hli],a           ; 2
-    ld a,[de]            ; 2
-    inc e                ; 1
-    ld [hli],a           ; 2
-    ld a,[de]            ; 2
-    inc e                ; 1
-    ld [hli],a           ; 2
-    ld a,[de]            ; 2
-    inc e                ; 1
-    ld [hli],a           ; 2
-    ld a,[de]            ; 2
-    inc e                ; 1
-    ld [hli],a           ; 2
-    ld a,[de]            ; 2
-    inc e                ; 1
-    ld [hli],a           ; 2
-    ld a,[de]            ; 2
-    inc e                ; 1
-    ld [hli],a           ; 2
-    ld a,[de]            ; 2
-    inc e                ; 1
-    ld [hli],a           ; 2
-    ld a,[de]            ; 2
-    inc e                ; 1
-    ld [hli],a           ; 2
-    ld a,[de]            ; 2
-    inc e                ; 1
-    ld [hli],a           ; 2
+  ENDR
     add hl,bc
+ENDR
 
+REPT 10
     ld a,[de]            ; 2
     inc e                ; 2
     ld [hli],a           ; 2
-    ld a,[de]            ; 2
-    inc e                ; 1
-    ld [hli],a           ; 2
-    ld a,[de]            ; 2
-    inc e                ; 1
-    ld [hli],a           ; 2
-    ld a,[de]            ; 2
-    inc e                ; 1
-    ld [hli],a           ; 2
-    ld a,[de]            ; 2
-    inc e                ; 1
-    ld [hli],a           ; 2
-    ld a,[de]            ; 2
-    inc e                ; 1
-    ld [hli],a           ; 2
-    ld a,[de]            ; 2
-    inc e                ; 1
-    ld [hli],a           ; 2
-    ld a,[de]            ; 2
-    inc e                ; 1
-    ld [hli],a           ; 2
-    ld a,[de]            ; 2
-    inc e                ; 1
-    ld [hli],a           ; 2
-    ld a,[de]            ; 2
-    inc e                ; 1
-    ld [hli],a           ; 2
-    add hl,bc
-
-    ld a,[de]            ; 2
-    inc e                ; 2
-    ld [hli],a           ; 2
-    ld a,[de]            ; 2
-    inc e                ; 1
-    ld [hli],a           ; 2
-    ld a,[de]            ; 2
-    inc e                ; 1
-    ld [hli],a           ; 2
-    ld a,[de]            ; 2
-    inc e                ; 1
-    ld [hli],a           ; 2
-    ld a,[de]            ; 2
-    inc e                ; 1
-    ld [hli],a           ; 2
-    ld a,[de]            ; 2
-    inc e                ; 1
-    ld [hli],a           ; 2
-    ld a,[de]            ; 2
-    inc e                ; 1
-    ld [hli],a           ; 2
-    ld a,[de]            ; 2
-    inc e                ; 1
-    ld [hli],a           ; 2
-    ld a,[de]            ; 2
-    inc e                ; 1
-    ld [hli],a           ; 2
-    ld a,[de]            ; 2
-    inc e                ; 1
-    ld [hli],a           ; 2
-    add hl,bc
-
-    ld a,[de]            ; 2
-    inc e                ; 2
-    ld [hli],a           ; 2
-    ld a,[de]            ; 2
-    inc e                ; 1
-    ld [hli],a           ; 2
-    ld a,[de]            ; 2
-    inc e                ; 1
-    ld [hli],a           ; 2
-    ld a,[de]            ; 2
-    inc e                ; 1
-    ld [hli],a           ; 2
-    ld a,[de]            ; 2
-    inc e                ; 1
-    ld [hli],a           ; 2
-    ld a,[de]            ; 2
-    inc e                ; 1
-    ld [hli],a           ; 2
-    ld a,[de]            ; 2
-    inc e                ; 1
-    ld [hli],a           ; 2
-    ld a,[de]            ; 2
-    inc e                ; 1
-    ld [hli],a           ; 2
-    ld a,[de]            ; 2
-    inc e                ; 1
-    ld [hli],a           ; 2
-    ld a,[de]            ; 2
-    inc e                ; 1
-    ld [hli],a           ; 2
-    add hl,bc
-
-    ld a,[de]            ; 2
-    inc e                ; 2
-    ld [hli],a           ; 2
-    ld a,[de]            ; 2
-    inc e                ; 1
-    ld [hli],a           ; 2
-    ld a,[de]            ; 2
-    inc e                ; 1
-    ld [hli],a           ; 2
-    ld a,[de]            ; 2
-    inc e                ; 1
-    ld [hli],a           ; 2
-    ld a,[de]            ; 2
-    inc e                ; 1
-    ld [hli],a           ; 2
-    ld a,[de]            ; 2
-    inc e                ; 1
-    ld [hli],a           ; 2
-    ld a,[de]            ; 2
-    inc e                ; 1
-    ld [hli],a           ; 2
-    ld a,[de]            ; 2
-    inc e                ; 1
-    ld [hli],a           ; 2
-    ld a,[de]            ; 2
-    inc e                ; 1
-    ld [hli],a           ; 2
-    ld a,[de]            ; 2
-    inc e                ; 1
-    ld [hli],a           ; 2
-    add hl,bc
-
-    ld a,[de]            ; 2
-    inc e                ; 2
-    ld [hli],a           ; 2
-    ld a,[de]            ; 2
-    inc e                ; 1
-    ld [hli],a           ; 2
-    ld a,[de]            ; 2
-    inc e                ; 1
-    ld [hli],a           ; 2
-    ld a,[de]            ; 2
-    inc e                ; 1
-    ld [hli],a           ; 2
-    ld a,[de]            ; 2
-    inc e                ; 1
-    ld [hli],a           ; 2
-    ld a,[de]            ; 2
-    inc e                ; 1
-    ld [hli],a           ; 2
-    ld a,[de]            ; 2
-    inc e                ; 1
-    ld [hli],a           ; 2
-    ld a,[de]            ; 2
-    inc e                ; 1
-    ld [hli],a           ; 2
-    ld a,[de]            ; 2
-    inc e                ; 1
-    ld [hli],a           ; 2
-    ld a,[de]            ; 2
-    inc e                ; 1
-    ld [hli],a           ; 2
-    add hl,bc
-
-    ld a,[de]            ; 2
-    inc e                ; 2
-    ld [hli],a           ; 2
-    ld a,[de]            ; 2
-    inc e                ; 1
-    ld [hli],a           ; 2
-    ld a,[de]            ; 2
-    inc e                ; 1
-    ld [hli],a           ; 2
-    ld a,[de]            ; 2
-    inc e                ; 1
-    ld [hli],a           ; 2
-    ld a,[de]            ; 2
-    inc e                ; 1
-    ld [hli],a           ; 2
-    ld a,[de]            ; 2
-    inc e                ; 1
-    ld [hli],a           ; 2
-    ld a,[de]            ; 2
-    inc e                ; 1
-    ld [hli],a           ; 2
-    ld a,[de]            ; 2
-    inc e                ; 1
-    ld [hli],a           ; 2
-    ld a,[de]            ; 2
-    inc e                ; 1
-    ld [hli],a           ; 2
-    ld a,[de]            ; 2
-    inc e                ; 1
-    ld [hli],a           ; 2
-    add hl,bc
-
-    ld a,[de]            ; 2
-    inc e                ; 2
-    ld [hli],a           ; 2
-    ld a,[de]            ; 2
-    inc e                ; 1
-    ld [hli],a           ; 2
-    ld a,[de]            ; 2
-    inc e                ; 1
-    ld [hli],a           ; 2
-    ld a,[de]            ; 2
-    inc e                ; 1
-    ld [hli],a           ; 2
-    ld a,[de]            ; 2
-    inc e                ; 1
-    ld [hli],a           ; 2
-    ld a,[de]            ; 2
-    inc e                ; 1
-    ld [hli],a           ; 2
-    ld a,[de]            ; 2
-    inc e                ; 1
-    ld [hli],a           ; 2
-    ld a,[de]            ; 2
-    inc e                ; 1
-    ld [hli],a           ; 2
-    ld a,[de]            ; 2
-    inc e                ; 1
-    ld [hli],a           ; 2
-    ld a,[de]            ; 2
-    inc e                ; 1
-    ld [hli],a           ; 2
-    add hl,bc
-
-    ld a,[de]            ; 2
-    inc e                ; 2
-    ld [hli],a           ; 2
-    ld a,[de]            ; 2
-    inc e                ; 1
-    ld [hli],a           ; 2
-    ld a,[de]            ; 2
-    inc e                ; 1
-    ld [hli],a           ; 2
-    ld a,[de]            ; 2
-    inc e                ; 1
-    ld [hli],a           ; 2
-    ld a,[de]            ; 2
-    inc e                ; 1
-    ld [hli],a           ; 2
-    ld a,[de]            ; 2
-    inc e                ; 1
-    ld [hli],a           ; 2
-    ld a,[de]            ; 2
-    inc e                ; 1
-    ld [hli],a           ; 2
-    ld a,[de]            ; 2
-    inc e                ; 1
-    ld [hli],a           ; 2
-    ld a,[de]            ; 2
-    inc e                ; 1
-    ld [hli],a           ; 2
-    ld a,[de]            ; 2
-    inc e                ; 1
-    ld [hli],a           ; 2
+ENDR
     ret
 
 

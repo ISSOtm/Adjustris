@@ -182,18 +182,22 @@ vblank:
     dec     a
     jr      z,.Hiscores_VBlank
     dec     a
-    jp      z,.Credits_VBlank
+    jr      z,.Credits_VBlank
     ldh     a,[TileUpdate]
     and     a
-    jr      z,.done
-    call    UpdateTiles
-    jr      .done_VBlank
+    jr      nz,.updateTiles
+    
 .done
     ldh     a,[FrameCounter]
     and     1
     jr      nz,.second
     call    UpdateScoreTiles
     jr      .done_VBlank
+    
+.updateTiles
+    call    UpdateTiles
+    jr .done_VBlank
+    
 .second
     call    UpdateNextPiece
 ;.NoScore
@@ -220,12 +224,21 @@ vblank:
     ldh     a,[MenuPosition]
     and     a
     jr      nz,.Menu_V_NotPlay
-    ld      hl,$9A12
     ldh     a,[SelectedSet]
     add     a,$31
-    ld      [hl],a
+    ld      [$9A12],a
 .Menu_V_NotPlay
     jr      .done_VBlank
+
+  
+.Credits_VBlank
+    ld      h,$99
+    ldh     a,[CR_VRAMPos]
+    ld      l,a
+    ldh     a,[CR_NextChar]
+    ld      [hl],a
+    jr      .done_VBlank
+    
 
 .Hiscores_VBlank
     ldh     a,[HI_UpdateScores]
@@ -265,15 +278,6 @@ vblank:
     ld      [$996F],a
 
 .Hiscores_V_done
-    jr      .done_VBlank
-
-  
-.Credits_VBlank
-    ld      h,$99
-    ldh     a,[CR_VRAMPos]
-    ld      l,a
-    ldh     a,[CR_NextChar]
-    ld      [hl],a
     jr      .done_VBlank
 
   
